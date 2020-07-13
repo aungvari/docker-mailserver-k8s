@@ -1,0 +1,230 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mailserver
+---  
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: mailserver.env.config
+  namespace: mailserver
+  labels:
+    app: mailserver
+data:
+  OVERRIDE_HOSTNAME: example.com
+  SMTP_ONLY: "0"
+  ENABLE_FETCHMAIL: "0"
+  FETCHMAIL_POLL: "120"
+  ENABLE_SPAMASSASSIN: "0"
+  ENABLE_CLAMAV: "0"
+  ENABLE_FAIL2BAN: "0"
+  ENABLE_POSTGREY: "0"
+  ONE_DIR: "1"
+  DMS_DEBUG: "0"
+  POSTFIX_INET_PROTOCOLS: "ipv4"
+
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: mailserver.config
+  namespace: mailserver
+  labels:
+    app: mailserver
+data:
+  postfix-accounts.cf: |
+    user1@example.com|{SHA512-CRYPT}YpW1nYtPBs2yLYS.5PGH1OEzsHHNhl3gJrc3D.YMZkvKw/vp.r5WIiwya6z7P/CQ9GDEJDr2G2V0cAfjDFeAQPUoopsuWPXLk3u1
+    user2@example.com
+
+  postfix-virtual.cf: |
+    alias1@example.com user1@example.com
+    alias2@example.com user2@example.com
+  
+  postfix-main.cf: |
+    smtpd_recipient_restrictions = permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination, reject_unauth_pipelining, reject_invalid_helo_hostname, reject_non_fqdn_helo_hostname, reject_unknown_recipient_domain, reject_rbl_client zen.spamhaus.org, reject_rbl_client bl.spamcop.net
+    mydestination = localhost.$mydomain, localhost
+
+  #dovecot.cf: |
+  #  service stats {
+  #    unix_listener stats-reader {
+  #      group = docker
+  #      mode = 0666
+  #    }
+  #    unix_listener stats-writer {
+  #      group = docker
+  #      mode = 0666
+  #    }
+  #  }
+
+  SigningTable: |
+    *@example.com mail._domainkey.example.com
+
+  KeyTable: |
+    mail._domainkey.example.com example.com:mail:/etc/opendkim/keys/example.com-mail.key
+
+  TrustedHosts: |
+    127.0.0.1
+    localhost
+    192.168.62.128
+ 
+  #user-patches.sh: |
+  #  #!/bin/bash
+
+  #fetchmail.cf: |
+
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: mailserver.opendkim.keys
+  namespace: mailserver
+  labels:
+    app: mailserver
+type: Opaque
+data:
+  example.com-mail.key: 'LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBdVMzVFFVWU1Wa2xTaG8yQXZJQThueFJDZ09wMXNidEtpblNPcUtKVkpkZDdRTWNrCnRLRVFjU1hKZTVOL20xY1E1MkJZZTdoUGJtSDhobTZ1RXFkSUx5dms3N05zTlYxWUY2MkV1V211a25PNnd5WUkKNmZST24yOGJXYzkzM0NnaHZBREJtOGp1NUg0WCt6cmI1UmJGYWZEVk9TUXdqTk5GcStJRXpuSmJXVktwTkFwRApubkhJaElMV1EwYTRiY1lNUWppcHdHOHZwNnhKeUFKdzQ1STRyS3ZEV05JcTUyZ3ZmOG8yQmF3RjQ1WmNTU0loCjBpenp5eWRYVWcyNTBlRHp0SHA3dTd3cVFXZHA2Tkx0UkdaRWpFTTVyRHU1cWRVdVZJUVFHeUdsRmlGL2hzeEMKYWxhMDlYT3FBZlhwYXJTc2JvVGJTV05HZkRxcE9EVlpGZWlvcVFJREFRQUJBb0lCQUhlRzZydFJPWmxnanBJbgpPQmQwTnF6LzZNVkprVnA5WituaXZrcC9MYkxWV2N0QVA2TVA2NHI5TndZNitMME4vKzA1TlNQMm5kN0VCTG5KCkt6Y0RId2JEc0d4QVJmSlVKQTUwaEIwaDUvckVGS0x1SkFiUEdRaTBNTlZSb3k1S0FTeFcyS0Z6bXkrRmJIbFAKVHF5YWZDYWJ1eVc5QkZHQjlaQ3l2U044a1JZZnVIRERWNThDUEtjVmtMeUoxV01yWkgzc1N3dGxnZmdrZjd0SQpRMC82VmJwRS8wSWNsNHh5SSsyN3BNdm1lazdGdUlqTmZVdm52RWVWKytoaXNwdHgyUFcvUmFjd0dPODIvUCtYCkVQcUtaU2JMM2cyT1Vzay9GWlBqUVRIT1pyaW45QW4wbXVKQ1FMeUV1akhtUVVTTFdrakxvSU1vU25Wcm1ER00KZ3RYN1hQa0NnWUVBOE53cTNRQjZHL1l1dHcrOHZ0RlJQQnNEcktKM2tVTDNzbTY0bER3TkY1cDZNSVN4ek5KTwpNWDE0b09BNlJFeHBtU2lJc1NJWjEyREtPM2QvbE1FTHllUlRoa1JWSFNFSmJ6VDM4TnVRTHRCQzh4SCttN3haCm9UVmx2OTN1T2MybTcrSnlqZTlEUlJjaTFCZ3BrRHpsQjhvUEMxRUFhL1o4MHQraTk4UnFKU3NDZ1lFQXhOR28KcXE5SjBucnM2cmhiMWsrNlUwTUhMdlgva3hRcWtITitGYTh5SFFsMmNleTcwR3JiT0xNT1NNT2c4a0E4VWNCTgo0TFYzYjNNQkJFazgwK3hpN2JXM2c1SDRtMGtibHpKV0JyTW52Sks3K0kwRS9id3ZvaW5ma3lEZWY0T0EwSHNQCnlMK3lFaUo1T0hHU2JTSDRYY0JyY2FTeXM4NGs0Rk1NWVd5ZDUzc0NnWUVBdm5HblpxVlk1OEVKQU8vdGtvZFoKRHdoaEtHQXg0R2F1Q2FUb1J6VVFPUWlJOHRJSTcrV2R0QjM4Z2wrcFVwV0VyWGhTVkpTZEVDSlU1UjVBZjNNQQppanNDRzlqdDM2RmVuMUtuZFFkMmdyMWpJbVNwQjZTdXpmdTFuemF3aFgzcE1DWEI1QjQ1OTJncXZyNzRKamN2CjlLKzhvM3NCdFZ2cEtLZHhhUzBockk4Q2dZQURuL1RpUjk0dE1UUmgwa2xtdGdzeGMxK1RmdFpaS0Jyc2xDUHoKVkVtdy9UYWdQSUx0QUxyTzNZVmEwN2VJSHFTOXdMUHVlb2tibFZ1a2I1RGVPbEZNSFhlbXhhNTFkYkE3WmFMdAo5cWk1c1Y0aTRyMy95bEo2UXhrcUJZWHpoVUYvRlhVaDlsM2FOYVpUNHN1V2xQU1ZEWEV0STZKaTYxNEVmNk1QCnZFZGdOd0tCZ0FIZEE2Z2ZRQUFDUGlTTzQ5aENsYURvUDB5cWNBNTFXb0xBREJqK3hHelFoOXFVVy9qa1BML0kKa3ZhRVNjWjVKV0c2UHRLVTBjUTVKbEU0b3hNMkQ4TVZEOER1NVRJaGVMRkthVnhhZlU5OXM0TEVTeVJlWkJlVAp2eldTZ1pYRjBVL2Ftc3BYUkdCbUhEMWlQUEZoSm1VOHZYb1VHeXA1Mm5vYmhEZUNDR2ZMCi0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg=='
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: mailserver
+  namespace: mailserver
+  labels:
+    app: mailserver
+spec:
+  selector:
+    app: mailserver
+  ports:
+    - name: smtp
+      port: 25
+      targetPort: smtp
+    - name: smtp-secure
+      port: 465
+      targetPort: smtp-secure
+    - name: smtp-auth
+      port: 587
+      targetPort: smtp-auth
+    - name: imap
+      port: 143
+      targetPort: imap
+    - name: imap-secure
+      port: 993
+      targetPort: imap-secure
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailserver
+  namespace: mailserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailserver
+  template:
+    metadata:
+      labels:
+        app: mailserver
+        role: mail
+        tier: backend
+    spec:
+      #nodeSelector:
+      #  kubernetes.io/hostname: local.k8s
+      #initContainers:
+      #- name: init-myservice
+      #  image: busybox
+      #  command: ["/bin/sh", "-c", "cp /tmp/user-patches.sh /tmp/files"]
+      #  volumeMounts:
+      #    - name: config
+      #      subPath: user-patches.sh
+      #      mountPath: /tmp/user-patches.sh
+      #      readOnly: true
+      #    - name: tmp-files
+      #      mountPath: /tmp/files
+      containers:
+      - name: docker-mailserver
+        image: tvial/docker-mailserver:latest
+        imagePullPolicy: Always
+        volumeMounts:
+          - name: config
+            subPath: postfix-accounts.cf
+            mountPath: /tmp/docker-mailserver/postfix-accounts.cf
+            readOnly: true
+          - name: config
+            subPath: postfix-main.cf
+            mountPath: /tmp/docker-mailserver/postfix-main.cf
+            readOnly: true
+          - name: config
+            subPath: postfix-virtual.cf
+            mountPath: /tmp/docker-mailserver/postfix-virtual.cf
+            readOnly: true
+          - name: config
+            subPath: fetchmail.cf
+            mountPath: /tmp/docker-mailserver/fetchmail.cf
+            readOnly: true
+          - name: config
+            subPath: dovecot.cf
+            mountPath: /tmp/docker-mailserver/dovecot.cf
+            readOnly: true
+          #- name: config
+          #  subPath: user1.example.com.dovecot.sieve
+          #  mountPath: /tmp/docker-mailserver/user1@example.com.dovecot.sieve
+          #  readOnly: true
+          #- name: tmp-files
+          #  subPath: user-patches.sh
+          #  mountPath: /tmp/docker-mailserver/user-patches.sh
+          - name: config
+            subPath: SigningTable
+            mountPath: /tmp/docker-mailserver/opendkim/SigningTable
+            readOnly: true
+          - name: config
+            subPath: KeyTable
+            mountPath: /tmp/docker-mailserver/opendkim/KeyTable
+            readOnly: true
+          - name: config
+            subPath: TrustedHosts
+            mountPath: /tmp/docker-mailserver/opendkim/TrustedHosts
+            readOnly: true
+          - name: opendkim-keys
+            mountPath: /tmp/docker-mailserver/opendkim/keys
+            readOnly: true
+          - name: data
+            mountPath: /var/mail
+            subPath: data
+          - name: data
+            mountPath: /var/mail-state
+            subPath: state
+          - name: data
+            mountPath: /var/log/mail
+            subPath: log
+        ports:
+          - name: smtp
+            containerPort: 25
+            hostPort: 25
+            protocol: TCP
+          - name: smtp-secure
+            containerPort: 465
+            protocol: TCP
+          - name: smtp-auth
+            containerPort: 587
+          - name: imap
+            containerPort: 143
+            protocol: TCP
+          - name: imap-secure
+            containerPort: 993
+            protocol: TCP
+        envFrom:
+          - configMapRef:
+              name: mailserver.env.config
+      volumes:
+        - name: config
+          configMap:
+            name: mailserver.config
+        - name: opendkim-keys
+          secret:
+            secretName: mailserver.opendkim.keys
+        - name: data
+          persistentVolumeClaim:
+            claimName: mail-storage
+        - name: tmp-files
+          emptyDir: {}
